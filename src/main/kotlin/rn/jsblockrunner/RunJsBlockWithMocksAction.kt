@@ -110,7 +110,11 @@ class RunJsBlockWithMocksAction : AnAction() {
                 functionArgs = if (funcInfo != null && funcInfo.paramNames.isNotEmpty()) dialogResult.argExprs else emptyList()
             )
 
-            runNodeInConsole(project, nodePath, runnerFile)
+            if (dialogResult.debugMode) {
+                runNodeInDebugMode(project, nodePath, runnerFile)
+            } else {
+                runNodeInConsole(project, nodePath, runnerFile)
+            }
         }
 
         // Show dialog with run callback
@@ -138,6 +142,42 @@ class RunJsBlockWithMocksAction : AnAction() {
         RunContentManager.getInstance(project).showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor)
 
         console.print("Running: ${cmd.commandLineString}\n\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        processHandler.startNotify()
+    }
+
+    private fun runNodeInDebugMode(project: Project, nodePath: String, runnerFile: File) {
+        // Use --inspect-brk to pause at start so debugger can attach
+        val cmd = GeneralCommandLine(nodePath, "--inspect-brk", runnerFile.absolutePath)
+            .withCharset(StandardCharsets.UTF_8)
+            .withWorkDirectory(project.basePath ?: runnerFile.parentFile.absolutePath)
+
+        val processHandler = OSProcessHandler(cmd)
+        val console: ConsoleView = TextConsoleBuilderFactory.getInstance().createBuilder(project).console
+        console.attachToProcess(processHandler)
+
+        val descriptor = RunContentDescriptor(console, processHandler, console.component, "JS Block Runner (Debug)")
+        RunContentManager.getInstance(project).showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor)
+
+        // Print debug instructions
+        console.print("=".repeat(63) + "\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("DEBUG MODE\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("=".repeat(63) + "\n\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        
+        console.print("Option 1: IntelliJ IDEA (Recommended)\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("  1. Run > Attach to Node.js/Chrome\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("  2. Set Host: localhost, Port: 9229\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("  3. Click Attach\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("  4. Press Resume (F9) to run to your 'debugger;' statement\n\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        
+        console.print("Option 2: Chrome DevTools\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("  1. Open Chrome: chrome://inspect\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("  2. Click 'inspect' under Remote Target\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("  3. Press F8 (Resume) to run to your 'debugger;' statement\n\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        
+        console.print("Tip: Add 'debugger;' in your code where you want to pause\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("=".repeat(63) + "\n\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.print("Running: ${cmd.commandLineString}\n\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        
         processHandler.startNotify()
     }
 }

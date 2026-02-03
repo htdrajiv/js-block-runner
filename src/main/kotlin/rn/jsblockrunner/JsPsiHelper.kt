@@ -99,6 +99,13 @@ object JsPsiHelper {
     fun extractFunctionInfoFromText(codeText: String): EnclosingFunctionInfo? {
         val trimmed = codeText.trim()
         
+        // Control flow keywords that should NOT be treated as function names
+        val controlFlowKeywords = setOf(
+            "if", "for", "while", "switch", "catch", "with", "do",
+            "try", "throw", "return", "break", "continue", "else",
+            "new", "typeof", "instanceof", "delete", "void", "yield"
+        )
+        
         // First, try to find the function name using simpler patterns
         val namePatterns = listOf(
             // async function name( or function name(
@@ -111,7 +118,7 @@ object JsPsiHelper {
             Regex("""^(\w+)\s*:\s*(?:async\s+)?\("""),
             // name: async function( or name: function(
             Regex("""^(\w+)\s*:\s*(?:async\s+)?function\s*\("""),
-            // async name( or name( (class method)
+            // async name( or name( (class method) - but NOT control flow keywords
             Regex("""^(?:async\s+)?(\w+)\s*\(""")
         )
         
@@ -119,8 +126,12 @@ object JsPsiHelper {
         for (pattern in namePatterns) {
             val match = pattern.find(trimmed)
             if (match != null) {
-                functionName = match.groupValues[1].ifBlank { null }
-                break
+                val candidateName = match.groupValues[1].ifBlank { null }
+                // Skip if the matched name is a control flow keyword
+                if (candidateName != null && candidateName !in controlFlowKeywords) {
+                    functionName = candidateName
+                    break
+                }
             }
         }
         

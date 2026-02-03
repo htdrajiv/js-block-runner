@@ -49,6 +49,9 @@ object RunnerGenerator {
         val strippedTs = stripTypeScript(stripImportsAndExports(userCode))
         val strippedCode = convertClassMethodToFunction(strippedTs.trim())
         
+        // Check if this is a plain code block (not a function definition)
+        val isPlainCodeBlock = functionName == null && functionArgs.isEmpty() && !isFunction(strippedCode)
+        
         // Determine if this is a code block (not a function) that needs 'this' binding
         val isCodeBlockWithThis = functionArgs.isEmpty() && (codeUsesThis || hasThisMocks)
         
@@ -66,9 +69,9 @@ object RunnerGenerator {
             """.trimIndent()
         } else ""
         
-        // For code blocks with 'this.' references or await, the user code goes inside the IIFE
+        // For code blocks with 'this.' references, await, or plain code blocks, the user code goes inside the IIFE
         // For functions, the user code is placed at the top level
-        val userCodeSection = if (isCodeBlockWithThis || isCodeBlockWithAwait) {
+        val userCodeSection = if (isCodeBlockWithThis || isCodeBlockWithAwait || isPlainCodeBlock) {
             "// Code block executed in async context below"
         } else {
             strippedCode
@@ -76,7 +79,49 @@ object RunnerGenerator {
         
         // Determine the execution wrapper based on code requirements
         val executionCode = when {
-            // Code block with both 'this.' and 'await'
+            // Plain code block with both 'this.' and 'await'
+            isPlainCodeBlock && isCodeBlockWithThis && isCodeBlockWithAwait -> {
+                """
+// Initialize __mockThis for 'this.' references
+globalThis.__mockThis = globalThis.__mockThis ?? {};
+
+// Execute the code block with 'this' bound to __mockThis (async)
+return (async function() {
+$strippedCode
+}).call(globalThis.__mockThis);
+""".trimIndent()
+            }
+            // Plain code block with only 'this.'
+            isPlainCodeBlock && isCodeBlockWithThis -> {
+                """
+// Initialize __mockThis for 'this.' references
+globalThis.__mockThis = globalThis.__mockThis ?? {};
+
+// Execute the code block with 'this' bound to __mockThis
+return (function() {
+$strippedCode
+}).call(globalThis.__mockThis);
+""".trimIndent()
+            }
+            // Plain code block with 'await' (no 'this.')
+            isPlainCodeBlock && isCodeBlockWithAwait -> {
+                """
+// Execute the code block in async context
+return (async function() {
+$strippedCode
+})();
+""".trimIndent()
+            }
+            // Plain code block (if, for, while, etc.) - wrap in async IIFE
+            isPlainCodeBlock -> {
+                """
+// Execute plain code block
+return (async function() {
+$strippedCode
+})();
+""".trimIndent()
+            }
+            // Function with 'this.' and 'await'
             isCodeBlockWithThis && isCodeBlockWithAwait -> {
                 """
 // Initialize __mockThis for 'this.' references
@@ -88,7 +133,7 @@ $strippedCode
 }).call(globalThis.__mockThis);
 """.trimIndent()
             }
-            // Code block with only 'this.'
+            // Function with only 'this.'
             isCodeBlockWithThis -> {
                 """
 // Initialize __mockThis for 'this.' references
@@ -100,7 +145,7 @@ $strippedCode
 }).call(globalThis.__mockThis);
 """.trimIndent()
             }
-            // Code block with only 'await' (no 'this.')
+            // Function with only 'await' (no 'this.')
             isCodeBlockWithAwait -> {
                 """
 // Execute the code block in async context
@@ -109,8 +154,20 @@ $strippedCode
 })();
 """.trimIndent()
             }
-            // Regular function call or code without special requirements
-            else -> callTarget
+            // Regular function call or fallback for code blocks
+            else -> {
+                if (callTarget.isBlank()) {
+                    // Fallback: wrap code in async IIFE if callTarget is empty
+                    """
+// Execute code block (fallback)
+return (async function() {
+$strippedCode
+})();
+""".trimIndent()
+                } else {
+                    callTarget
+                }
+            }
         }
 
         return """
@@ -152,6 +209,44 @@ function createSpyFunction(name, impl) {
   fn.calls = calls;
   fn.mockName = name;
   return fn;
+}
+
+function createSpyConstructor(name, impl) {
+  const calls = [];
+  // Use a regular function (not arrow) so it can be used with 'new'
+  function SpyConstructor(...args) {
+    calls.push({ args, timestamp: Date.now() });
+    try {
+      // If impl is a class/constructor, use new; otherwise call as function
+      if (impl.prototype && impl.prototype.constructor === impl) {
+        const instance = new impl(...args);
+        calls[calls.length - 1].result = instance;
+        return instance;
+      } else if (typeof impl === 'function') {
+        const result = impl(...args);
+        calls[calls.length - 1].result = result;
+        // If called with 'new' and result is not an object, return 'this'
+        if (new.target && (result === undefined || typeof result !== 'object')) {
+          Object.assign(this, { args });
+          return this;
+        }
+        return result;
+      } else {
+        // impl is a value, assign it to this
+        if (typeof impl === 'object' && impl !== null) {
+          Object.assign(this, impl);
+        }
+        calls[calls.length - 1].result = this;
+        return this;
+      }
+    } catch (err) {
+      calls[calls.length - 1].error = err;
+      throw err;
+    }
+  }
+  SpyConstructor.calls = calls;
+  SpyConstructor.mockName = name;
+  return SpyConstructor;
 }
 
 // ════════════���══════════════════════════════════════════════════
@@ -340,8 +435,23 @@ return __target($argsExpr);
 """.trimIndent()
         }
 
+        // Check if this looks like a constructor (PascalCase)
+        val isLikelyConstructor = key.first().isUpperCase()
+        
         return if (!key.contains(".")) {
-            """
+            if (isLikelyConstructor) {
+                // Use createSpyConstructor for PascalCase names (likely constructors)
+                """
+(function(){
+  if (typeof $safeVar === 'function') {
+    globalThis["$key"] = createSpyConstructor("$key", $safeVar);
+  } else {
+    globalThis["$key"] = $safeVar;
+  }
+})();
+""".trimIndent()
+            } else {
+                """
 (function(){
   if (typeof $safeVar === 'function') {
     globalThis["$key"] = createSpyFunction("$key", $safeVar);
@@ -350,6 +460,7 @@ return __target($argsExpr);
   }
 })();
 """.trimIndent()
+            }
         } else {
             val parts = key.split(".")
             val top = parts.first()
@@ -397,27 +508,49 @@ return __target($argsExpr);
         val result = StringBuilder()
         var i = 0
         
+        // Keywords that have parentheses but are NOT function parameter lists
+        val controlFlowKeywords = setOf("if", "for", "while", "switch", "catch", "with", "new", "return", "throw")
+        
         while (i < code.length) {
-            if (code[i] == '(') {
-                result.append('(')
-                i++
+            if (code[i] == '(' && i > 0) {
+                // Check what's before the parenthesis
+                val beforeParen = code.substring(0, i).trimEnd()
                 
-                val paramContent = StringBuilder()
-                var depth = 1
-                while (i < code.length && depth > 0) {
-                    when (code[i]) {
-                        '(' -> depth++
-                        ')' -> depth--
+                // Extract the last word before the paren
+                val lastWordMatch = Regex("""\b(\w+)\s*$""").find(beforeParen)
+                val lastWord = lastWordMatch?.groupValues?.get(1) ?: ""
+                
+                // Skip stripping for control flow statements and other non-function contexts
+                val isControlFlow = lastWord in controlFlowKeywords
+                
+                // Only strip types for function definitions (after 'function' keyword)
+                // Be conservative - only strip after explicit 'function' keyword
+                val isFunctionDef = beforeParen.endsWith("function")
+                
+                if (isFunctionDef) {
+                    result.append('(')
+                    i++
+                    
+                    val paramContent = StringBuilder()
+                    var depth = 1
+                    while (i < code.length && depth > 0) {
+                        when (code[i]) {
+                            '(' -> depth++
+                            ')' -> depth--
+                        }
+                        if (depth > 0) {
+                            paramContent.append(code[i])
+                        }
+                        i++
                     }
-                    if (depth > 0) {
-                        paramContent.append(code[i])
-                    }
+                    
+                    val strippedParams = stripTypesFromParams(paramContent.toString())
+                    result.append(strippedParams)
+                    result.append(')')
+                } else {
+                    result.append(code[i])
                     i++
                 }
-                
-                val strippedParams = stripTypesFromParams(paramContent.toString())
-                result.append(strippedParams)
-                result.append(')')
             } else {
                 result.append(code[i])
                 i++
@@ -675,5 +808,18 @@ return __target($argsExpr);
         }
         
         return imports.distinct()
+    }
+
+    private fun isFunction(code: String): Boolean {
+        val trimmed = code.trim()
+        // Check if code is a function definition
+        return trimmed.startsWith("function ") ||
+               trimmed.startsWith("async function ") ||
+               trimmed.matches(Regex("""^const\s+\w+\s*=\s*(?:async\s*)?\(.*\)\s*=>.*""", RegexOption.DOT_MATCHES_ALL)) ||
+               trimmed.matches(Regex("""^const\s+\w+\s*=\s*(?:async\s*)?function.*""", RegexOption.DOT_MATCHES_ALL)) ||
+               trimmed.matches(Regex("""^let\s+\w+\s*=\s*(?:async\s*)?\(.*\)\s*=>.*""", RegexOption.DOT_MATCHES_ALL)) ||
+               trimmed.matches(Regex("""^let\s+\w+\s*=\s*(?:async\s*)?function.*""", RegexOption.DOT_MATCHES_ALL)) ||
+               trimmed.matches(Regex("""^var\s+\w+\s*=\s*(?:async\s*)?\(.*\)\s*=>.*""", RegexOption.DOT_MATCHES_ALL)) ||
+               trimmed.matches(Regex("""^var\s+\w+\s*=\s*(?:async\s*)?function.*""", RegexOption.DOT_MATCHES_ALL))
     }
 }

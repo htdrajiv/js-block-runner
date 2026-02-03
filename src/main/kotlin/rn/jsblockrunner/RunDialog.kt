@@ -12,7 +12,8 @@ import javax.swing.*
 
 data class RunDialogResult(
     val enabledMocks: Map<String, String?>,
-    val argExprs: List<String>
+    val argExprs: List<String>,
+    val debugMode: Boolean = false
 )
 
 class RunDialog(
@@ -27,6 +28,7 @@ class RunDialog(
     private val argFields = mutableListOf<Pair<JBTextField, ComboBox<String>>>()
     private val mockRows = linkedMapOf<String, MockRow>()
     private var runCount = 0
+    private lateinit var debugCheckbox: JCheckBox
 
     companion object {
         val MOCK_TEMPLATES = listOf(
@@ -229,10 +231,20 @@ class RunDialog(
     override fun createSouthPanel(): JComponent {
         val panel = JPanel(BorderLayout())
         
-        // Run count label on the left
+        // Left side: Run count and debug checkbox
+        val leftPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
+        
         val runCountLabel = JLabel("Runs: 0")
-        runCountLabel.border = BorderFactory.createEmptyBorder(0, 10, 0, 0)
-        panel.add(runCountLabel, BorderLayout.WEST)
+        leftPanel.add(runCountLabel)
+        
+        leftPanel.add(Box.createHorizontalStrut(20))
+        
+        // Debug checkbox
+        debugCheckbox = JCheckBox("🐛 Debug (chrome://inspect)")
+        debugCheckbox.toolTipText = "Run with Node.js inspector. Open chrome://inspect to debug."
+        leftPanel.add(debugCheckbox)
+        
+        panel.add(leftPanel, BorderLayout.WEST)
         
         // Buttons on the right
         val buttonPanel = JPanel(FlowLayout(FlowLayout.RIGHT))
@@ -341,7 +353,8 @@ class RunDialog(
 
         return RunDialogResult(
             enabledMocks = enabledMocks, 
-            argExprs = args
+            argExprs = args,
+            debugMode = debugCheckbox.isSelected
         )
     }
 }
