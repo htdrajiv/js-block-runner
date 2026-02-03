@@ -1,0 +1,18 @@
+<idea-plugin>
+    <id>rn.jsblockrunner</id>
+    <name>JS Block Runner</name>
+    <vendor email="rajiv.neupane@alteryx.com">Rajiv Neupane</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>JavaScript</depends>
+
+    <actions>
+        <action id="JsBlockRunner.RunWithMocks"
+                class="rn.jsblockrunner.RunJsBlockWithMocksAction"
+                text="Run JS Block with Mocks"
+                description="Run selected JS code or enclosing function in Node with interactive mocks">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt R"/>
+        </action>
+    </actions>
+</idea-plugin>
