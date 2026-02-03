@@ -1,7 +1,81 @@
 <idea-plugin>
     <id>rn.jsblockrunner</id>
     <name>JS Block Runner</name>
-    <vendor email="rajiv.neupane@alteryx.com">Rajiv Neupane</vendor>
+    <vendor email="rajiv.neupane@alteryx.com" url="https://github.com/rajivneupane">Rajiv Neupane</vendor>
+    
+    <description><![CDATA[
+<h2>Run JavaScript/TypeScript code blocks instantly with mocking support</h2>
+
+<p>JS Block Runner lets you execute JavaScript or TypeScript code snippets directly from your editor without setting up test files or running your entire application. Perfect for quick testing, debugging, and exploring code behavior.</p>
+
+<h3>✨ Key Features</h3>
+<ul>
+    <li><b>Run Any Code Block</b> - Execute selected code, functions, or the function under your cursor</li>
+    <li><b>Smart Mock Detection</b> - Automatically detects external dependencies that need mocking</li>
+    <li><b>Interactive Mock Editor</b> - Configure mock values with a user-friendly dialog</li>
+    <li><b>TypeScript Support</b> - Automatically strips type annotations for Node.js execution</li>
+    <li><b>Debug Mode</b> - Attach IntelliJ or Chrome DevTools debugger to step through code</li>
+    <li><b>Constructor Mocking</b> - Properly handles <code>new</code> keyword with spy constructors</li>
+    <li><b>Async/Await Support</b> - Full support for async functions and await expressions</li>
+    <li><b>this. References</b> - Mock <code>this.property</code> and <code>this.method()</code> calls</li>
+</ul>
+
+<h3>🚀 How to Use</h3>
+<ol>
+    <li>Place your cursor inside a function or select a code block</li>
+    <li>Right-click and select <b>"Run JS Block with Mocks"</b> (or press <code>Ctrl+Alt+R</code>)</li>
+    <li>Configure function arguments and mock values in the dialog</li>
+    <li>Click <b>Run</b> to execute in Node.js</li>
+</ol>
+
+<h3>🎯 Use Cases</h3>
+<ul>
+    <li>Test a single function without running the entire application</li>
+    <li>Explore how a code snippet behaves with different inputs</li>
+    <li>Debug complex logic by mocking external dependencies</li>
+    <li>Validate TypeScript code execution without compilation setup</li>
+    <li>Quick prototyping and experimentation</li>
+</ul>
+
+<h3>🔧 Mock Examples</h3>
+<p>The plugin auto-detects dependencies and suggests mocks. You can provide:</p>
+<ul>
+    <li><b>Simple values:</b> <code>"test"</code>, <code>42</code>, <code>true</code>, <code>null</code></li>
+    <li><b>Objects:</b> <code>({ id: 1, name: "test" })</code></li>
+    <li><b>Arrays:</b> <code>[1, 2, 3]</code></li>
+    <li><b>Functions:</b> <code>() => "mocked result"</code></li>
+    <li><b>Async functions:</b> <code>async () => ({ data: "response" })</code></li>
+    <li><b>Constructors:</b> <code>class { constructor(x) { this.x = x; } }</code></li>
+</ul>
+
+<h3>🐛 Debug Mode</h3>
+<p>Enable the debug checkbox to pause execution and attach a debugger:</p>
+<ul>
+    <li><b>IntelliJ:</b> Run → Attach to Node.js/Chrome (localhost:9229)</li>
+    <li><b>Chrome:</b> Open <code>chrome://inspect</code> and click "inspect"</li>
+</ul>
+<p>Add <code>debugger;</code> statements in your code to set breakpoints.</p>
+
+<h3>📋 Requirements</h3>
+<ul>
+    <li>Node.js installed and available in PATH</li>
+    <li>IntelliJ IDEA with JavaScript plugin</li>
+</ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+<h3>Version 1.0.0</h3>
+<ul>
+    <li>Initial release</li>
+    <li>Run JavaScript/TypeScript code blocks with Node.js</li>
+    <li>Smart detection of external dependencies for mocking</li>
+    <li>Interactive dialog for configuring mocks and function arguments</li>
+    <li>TypeScript type stripping for direct execution</li>
+    <li>Debug mode with Node.js inspector support</li>
+    <li>Support for async/await, this. references, and constructors</li>
+    <li>Mock call tracking and summary output</li>
+</ul>
+    ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>JavaScript</depends>
