@@ -561,4 +561,126 @@ object JsPsiHelper {
         "Node", "Element", "Document", "Window",
         "Console", "Performance", "Navigator", "Location", "History"
     )
+
+    /**
+     * Remove string literals from code to avoid detecting identifiers inside strings.
+     * Replaces string content with spaces to preserve positions for other operations.
+     */
+    fun stripStringLiterals(code: String): String {
+        val result = StringBuilder()
+        var i = 0
+        
+        while (i < code.length) {
+            val char = code[i]
+            
+            when (char) {
+                '"', '\'' -> {
+                    // Single or double quoted string
+                    val quote = char
+                    result.append(quote)
+                    i++
+                    
+                    while (i < code.length) {
+                        val c = code[i]
+                        if (c == '\\' && i + 1 < code.length) {
+                            // Escape sequence - replace with spaces
+                            result.append("  ")
+                            i += 2
+                        } else if (c == quote) {
+                            result.append(quote)
+                            i++
+                            break
+                        } else {
+                            // Replace string content with space
+                            result.append(' ')
+                            i++
+                        }
+                    }
+                }
+                '`' -> {
+                    // Template literal
+                    result.append('`')
+                    i++
+                    
+                    while (i < code.length) {
+                        val c = code[i]
+                        if (c == '\\' && i + 1 < code.length) {
+                            // Escape sequence
+                            result.append("  ")
+                            i += 2
+                        } else if (c == '$' && i + 1 < code.length && code[i + 1] == '{') {
+                            // Template expression ${...} - keep the expression
+                            result.append("\${")
+                            i += 2
+                            var depth = 1
+                            while (i < code.length && depth > 0) {
+                                when (code[i]) {
+                                    '{' -> {
+                                        depth++
+                                        result.append('{')
+                                    }
+                                    '}' -> {
+                                        depth--
+                                        result.append('}')
+                                    }
+                                    else -> result.append(code[i])
+                                }
+                                i++
+                            }
+                        } else if (c == '`') {
+                            result.append('`')
+                            i++
+                            break
+                        } else {
+                            // Replace template string content with space
+                            result.append(' ')
+                            i++
+                        }
+                    }
+                }
+                '/' -> {
+                    // Check for regex or comment
+                    if (i + 1 < code.length) {
+                        when (code[i + 1]) {
+                            '/' -> {
+                                // Single-line comment - replace with spaces until newline
+                                while (i < code.length && code[i] != '\n') {
+                                    result.append(' ')
+                                    i++
+                                }
+                            }
+                            '*' -> {
+                                // Multi-line comment - replace with spaces
+                                result.append("  ")
+                                i += 2
+                                while (i < code.length) {
+                                    if (code[i] == '*' && i + 1 < code.length && code[i + 1] == '/') {
+                                        result.append("  ")
+                                        i += 2
+                                        break
+                                    } else {
+                                        result.append(if (code[i] == '\n') '\n' else ' ')
+                                        i++
+                                    }
+                                }
+                            }
+                            else -> {
+                                result.append(char)
+                                i++
+                            }
+                        }
+                    } else {
+                        result.append(char)
+                        i++
+                    }
+                }
+                else -> {
+                    result.append(char)
+                    i++
+                }
+            }
+        }
+        
+        return result.toString()
+    }
 }

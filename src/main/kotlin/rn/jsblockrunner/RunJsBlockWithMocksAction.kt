@@ -52,9 +52,12 @@ class RunJsBlockWithMocksAction : AnAction() {
             return
         }
 
+        // Strip string literals to avoid detecting identifiers inside strings
+        val codeWithoutStrings = JsPsiHelper.stripStringLiterals(snippetText)
+        
         // Detect external calls (functions)
         val paramNames = funcInfo?.paramNames?.toSet() ?: emptySet()
-        val localDefinitions = JsPsiHelper.extractLocalDefinitions(snippetText)
+        val localDefinitions = JsPsiHelper.extractLocalDefinitions(codeWithoutStrings)
         val allLocalVars = paramNames + localDefinitions
         
         val externalCalls = if (!hasSelection && funcInfo != null) {
@@ -63,10 +66,10 @@ class RunJsBlockWithMocksAction : AnAction() {
             if (enclosingElement != null) {
                 JsPsiHelper.detectExternalCallKeysForFunction(enclosingElement)
             } else {
-                JsPsiHelper.detectExternalCallKeysByRegex(snippetText, paramNames)
+                JsPsiHelper.detectExternalCallKeysByRegex(codeWithoutStrings, paramNames)
             }
         } else {
-            JsPsiHelper.detectExternalCallKeysByRegex(snippetText, paramNames)
+            JsPsiHelper.detectExternalCallKeysByRegex(codeWithoutStrings, paramNames)
         }
             .filterNot { it in JsPsiHelper.DEFAULT_ALLOWLIST }
             // Filter out method calls on local variables (params, const, let, var)
@@ -76,10 +79,10 @@ class RunJsBlockWithMocksAction : AnAction() {
             }
         
         // Detect 'this.' references that need to be mocked
-        val thisReferences = JsPsiHelper.detectThisReferences(snippetText)
+        val thisReferences = JsPsiHelper.detectThisReferences(codeWithoutStrings)
         
         // Detect external constants/variables (UPPER_CASE and PascalCase)
-        val externalConstants = JsPsiHelper.detectExternalConstantsByRegex(snippetText)
+        val externalConstants = JsPsiHelper.detectExternalConstantsByRegex(codeWithoutStrings)
         val filteredConstants = externalConstants
             .filterNot { it in allLocalVars }
             .filterNot { const -> 
@@ -87,7 +90,7 @@ class RunJsBlockWithMocksAction : AnAction() {
             }
         
         // Detect external variables used as arguments (camelCase like authUrl, requestHeaders)
-        val externalVariables = JsPsiHelper.detectExternalVariablesByRegex(snippetText, allLocalVars)
+        val externalVariables = JsPsiHelper.detectExternalVariablesByRegex(codeWithoutStrings, allLocalVars)
             .filterNot { it in externalCalls } // Don't duplicate function calls
         
         val allExternalRefs = (externalCalls + filteredConstants + thisReferences + externalVariables).sorted()
