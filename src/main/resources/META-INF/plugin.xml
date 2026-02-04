@@ -1,6 +1,7 @@
 <idea-plugin>
     <id>rn.jsblockrunner</id>
     <name>JS Block Runner</name>
+    <version>1.0.0</version>
     <vendor email="rajiv.neupane@alteryx.com" url="https://github.com/rajivneupane">Rajiv Neupane</vendor>
     
     <description><![CDATA[
